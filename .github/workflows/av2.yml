@@ -26,36 +26,48 @@ jobs:
         Invoke-WebRequest -Uri "https://tortall.net" -OutFile "$ToolsDir\yasm.exe"
         echo "$ToolsDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    # 1. Native checkout directly into a completely pristine, permission-approved system folder path
+    # 1. Native checkout directly into a valid workspace subdirectory layout
     - name: Fetch Target Codebase cleanly
       uses: actions/checkout@v4
       with:
         repository: 'AOMediaCodec/avm'
         ref: 'main'
-        path: '../../../../ProgramData/codecsrc' # Forces checkout outside of the default workspace directory boundary
+        path: 'clean_src'
         submodules: 'recursive'
 
-    # 2. Configure and build using absolute, symbol-free directory trees
+    # 2. Dynamically rename the parent directory on the drive volume to scrub the word "avm" out of the absolute paths
     - name: Configure and Build AVM
       run: |
-        # Map out fully isolated system directories completely hidden from your repository name string rules
-        $AbsoluteSrcPath = "C:\ProgramData\codecsrc"
-        $AbsoluteBuildPath = "C:\ProgramData\codecbuild"
+        # Get the absolute path of the workspace parent container (D:\a\https-github.com-AOMediaCodec-avm)
+        $CurrentWorkspace = $env:GITHUB_WORKSPACE
+        $ParentDir = Split-Path -Path $CurrentWorkspace -Parent
         
-        New-Item -ItemType Directory -Force -Path $AbsoluteBuildPath
+        Write-Output "Renaming workspace container to break name loops..."
+        # Navigate one level up using the command line interpreter context to safely rename the directory handle
+        cd "$ParentDir"
+        cmd /c "ren https-github.com-AOMediaCodec-avm wspace"
+        
+        # Define the newly modified pristine pathway targets
+        $SanitizedSrc = "D:\a\wspace\clean_src"
+        $SanitizedBuild = "$env:TEMP\codecbuild"
+        New-Item -ItemType Directory -Force -Path $SanitizedBuild
         
         Write-Output "Configuring project with CMake..."
-        cmake -S "$AbsoluteSrcPath" -B "$AbsoluteBuildPath" -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe" -DENABLE_DOCS=0
+        cmake -S "$SanitizedSrc" -B "$SanitizedBuild" -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe" -DENABLE_DOCS=0
         
         Write-Output "Compiling production targets..."
-        cmake --build "$AbsoluteBuildPath" --config Release --parallel
+        cmake --build "$SanitizedBuild" --config Release --parallel
         
-        # Safe staging loop to move completed executables back to the repository workspace
-        New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\avm_binaries"
-        if (Test-Path "$AbsoluteBuildPath\Release\avmenc.exe") {
-            Copy-Item "$AbsoluteBuildPath\Release\avmenc.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
-            Copy-Item "$AbsoluteBuildPath\Release\avmdec.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
+        # Move the completed executables back to a temporary recovery folder
+        New-Item -ItemType Directory -Force -Path "D:\a\wspace\avm_binaries"
+        if (Test-Path "$SanitizedBuild\Release\avmenc.exe") {
+            Copy-Item "$SanitizedBuild\Release\avmenc.exe" -Destination "D:\a\wspace\avm_binaries\"
+            Copy-Item "$SanitizedBuild\Release\avmdec.exe" -Destination "D:\a\wspace\avm_binaries\"
         }
+        
+        # Restore original naming convention so the upload-artifact action can register the tracking folder structure natively
+        cd "$ParentDir"
+        cmd /c "ren wspace https-github.com-AOMediaCodec-avm"
 
     - name: Upload Compiled AVM Binaries
       uses: actions/upload-artifact@v4
