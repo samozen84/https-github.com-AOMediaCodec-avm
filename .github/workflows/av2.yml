@@ -11,15 +11,9 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    # 1. Force a clean, alphanumeric local path string without symbols or domains
-    - name: Checkout AVM Reference Source Code
+    # 1. Standard checkout of your repository to register the workflow trigger
+    - name: Checkout Workflow Repository
       uses: actions/checkout@v4
-      with:
-        repository: 'AOMediaCodec/avm'
-        ref: 'main'
-        path: 'avm_src'
-        submodules: 'recursive'
-        fetch-depth: 0
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -32,11 +26,16 @@ jobs:
         Invoke-WebRequest -Uri "https://tortall.net" -OutFile "C:\tools\yasm.exe"
         echo "C:\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    # 2. Point to the sanitized directory structure
+    # 2. Clone the code into a clean, symbol-free directory directly on the C:\ drive
+    - name: Clone AVM Reference Source Code Sanely
+      run: |
+        git clone --recursive --depth 1 https://github.com C:\avm_src
+
+    # 3. Configure and compile entirely on C:\ to completely bypass the workspace path limits
     - name: Configure CMake Externally
       run: |
-        mkdir avm_build
-        cmake -S avm_src -B avm_build -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe"
+        New-Item -ItemType Directory -Force -Path "C:\avm_build"
+        cmake -S "C:\avm_src" -B "C:\avm_build" -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe"
 
     - name: Build AVM Reference Software
-      run: cmake --build avm_build --config Release --parallel
+      run: cmake --build "C:\avm_build" --config Release --parallel
