@@ -21,39 +21,36 @@ jobs:
 
     - name: Install Yasm manually
       run: |
-        New-Item -ItemType Directory -Force -Path "C:\tools"
-        Invoke-WebRequest -Uri "https://tortall.net" -OutFile "C:\tools\yasm.exe"
-        echo "C:\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\tools"
+        Invoke-WebRequest -Uri "https://tortall.net" -OutFile "$env:USERPROFILE\tools\yasm.exe"
+        echo "$env:USERPROFILE\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    # Complete cloning, configuration, and compilation sandbox process on a clean alphanumeric C:\ path structure
+    # Run the entire build sequence inside the user's secure absolute temp profile space
     - name: Configure and Build AVM
       run: |
-        # 1. Clear out potential pre-existing security permission hooks
-        git config --global --add safe.directory '*'
+        # 1. Establish clean paths inside the local user profile space (alters path profile from forbidden workspace naming loops)
+        $SrcDir = Join-Path $env:USERPROFILE "LocalTempSrc"
+        $BuildDir = Join-Path $env:USERPROFILE "LocalTempBuild"
         
-        # 2. Establish clean absolute system path mappings completely clear of the repository name symbols
-        $SrcDir = "C:\csrc"
-        $BuildDir = "C:\cbuild"
-        
-        # 3. Pull down the target repository files along with structural submodules cleanly via native git execution
-        Write-Output "Fetching AVM target codebase..."
+        # 2. Clone the target codebase natively with full submodule support
+        Write-Output "Fetching AVM target codebase into user space..."
         git clone --recursive https://github.com "$SrcDir"
         
-        # 4. Initialize and output the build definition layout maps
+        # 3. Initialize build definitions using absolute paths
         Write-Output "Configuring project with CMake..."
         New-Item -ItemType Directory -Force -Path "$BuildDir"
         cmake -S "$SrcDir" -B "$BuildDir" -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe" -DENABLE_DOCS=0
         
-        # 5. Compile the static optimized binary executables
+        # 4. Compile optimized binaries
         Write-Output "Compiling production targets..."
         cmake --build "$BuildDir" --config Release --parallel
+        
+        # 5. Safe staging step to move finished binaries back to the runner workspace for upload
+        New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\avm_binaries"
+        Copy-Item "$BuildDir\Release\avmenc.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
+        Copy-Item "$BuildDir\Release\avmdec.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
 
-    - name: Prepare Artifacts
-      run: |
-        New-Item -ItemType Directory -Force -Path "avm_binaries"
-        Copy-Item "C:\cbuild\Release\avmenc.exe" -Destination "avm_binaries\"
-        Copy-Item "C:\cbuild\Release\avmdec.exe" -Destination "avm_binaries\"
-
+    # Uploads the artifacts directly out of the staged local workspace folder
     - name: Upload Compiled AVM Binaries
       uses: actions/upload-artifact@v4
       with:
