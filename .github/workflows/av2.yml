@@ -39,16 +39,19 @@ jobs:
     - name: Configure and Build AVM
       run: |
         # Define absolute folders inside the Temp partition, keeping paths completely clear of the word "avm"
-        $SanitizedSrc = Join-Path $env:RUNNER_TEMP "csrc"
-        $SanitizedBuild = Join-Path $env:RUNNER_TEMP "cbuild"
+        $SanitizedSrc = Join-Path $env:RUNNER_TEMP "buildsrc"
+        $SanitizedBuild = Join-Path $env:RUNNER_TEMP "buildout"
         
         # Instantiate pristine workspace trees on the storage partition drive
         New-Item -ItemType Directory -Force -Path $SanitizedSrc
         New-Item -ItemType Directory -Force -Path $SanitizedBuild
         
-        # Physically duplicate files out of the default workflow tracking directories
-        Write-Output "Staging source files to an anonymous path location..."
-        Copy-Item -Path "$env:GITHUB_WORKSPACE\raw-source\*" -Destination $SanitizedSrc -Recurse -Force
+        # Use robocopy for an uncorrupted, multi-threaded mirror transfer of submodules
+        Write-Output "Staging source files cleanly using Robocopy..."
+        robocopy "$env:GITHUB_WORKSPACE\raw-source" "$SanitizedSrc" /E /R:1 /W:1 /NFL /NDL /NJH /NJS
+        
+        # Robocopy returns non-zero codes on success, clear the error variable to prevent step failures
+        $global:LASTEXITCODE = 0
         
         # Run project configuration using completely sanitized destination maps
         Write-Output "Configuring project with CMake..."
@@ -60,9 +63,12 @@ jobs:
         
         # Safe staging step to extract compiled applications back to the workspace for download
         New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\avm_binaries"
-        Copy-Item "$SanitizedBuild\Release\avmenc.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
-        Copy-Item "$SanitizedBuild\Release\avmdec.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
+        if (Test-Path "$SanitizedBuild\Release\avmenc.exe") {
+            Copy-Item "$SanitizedBuild\Release\avmenc.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
+            Copy-Item "$SanitizedBuild\Release\avmdec.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
+        }
 
+    # Uploads the artifacts directly out of the staged local workspace folder
     - name: Upload Compiled AVM Binaries
       uses: actions/upload-artifact@v4
       with:
