@@ -33,13 +33,15 @@ jobs:
         path: 'csrc'
         submodules: 'recursive'
 
+    # Unified execution utilizing exact directory mapping keys to avoid terminal path tracking confusion
     - name: Configure and Build AVM
       run: |
-        cmake -S . -B "$env:RUNNER_TEMP\cbuild" -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe"
+        # Generate the visual studio project out to a clean folder using absolute parameters
+        cmake -S "$env:GITHUB_WORKSPACE\csrc" -B "$env:RUNNER_TEMP\cbuild" -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe" -DENABLE_DOCS=0
+        
+        # Build the binaries directly from the target folder location
         cmake --build "$env:RUNNER_TEMP\cbuild" --config Release --parallel
-      working-directory: csrc
 
-    # Copy files into a clean workspace subdirectory using native environment parameters before uploading
     - name: Prepare Artifacts
       run: |
         New-Item -ItemType Directory -Force -Path "avm_binaries"
