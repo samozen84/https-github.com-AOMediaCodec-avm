@@ -47,14 +47,17 @@ jobs:
         New-Item -ItemType Directory -Force -Path $SanitizedBuild
         
         Write-Output "Staging source files cleanly using Robocopy..."
-        # Robocopy codes below 8 are completely successful copy operations
-        robocopy "$env:GITHUB_WORKSPACE\raw-source" "$SanitizedSrc" /E /R:1 /W:1 /NFL /NDL /NJH /NJS
-        if ($LASTEXITCODE -lt 8) {
-            Write-Output "Robocopy structural mirror completed successfully."
+        
+        # Wrap robocopy execution to prevent PowerShell from instantly failing on exit codes 1-7
+        & robocopy "$env:GITHUB_WORKSPACE\raw-source" "$SanitizedSrc" /E /R:1 /W:1 /NFL /NDL /NJH /NJS
+        $RoboStatus = $LASTEXITCODE
+        
+        if ($RoboStatus -lt 8) {
+            Write-Output "Robocopy structural mirror completed successfully with status: $RoboStatus"
             $global:LASTEXITCODE = 0
         } else {
-            Write-Error "Robocopy failed with a fatal error code: $LASTEXITCODE"
-            exit $LASTEXITCODE
+            Write-Error "Robocopy failed with a fatal error code: $RoboStatus"
+            exit $RoboStatus
         }
         
         # Run project configuration using completely sanitized destination maps
