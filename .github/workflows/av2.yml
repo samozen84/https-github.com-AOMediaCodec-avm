@@ -26,30 +26,33 @@ jobs:
         Invoke-WebRequest -Uri "https://tortall.net" -OutFile "$ToolsDir\yasm.exe"
         echo "$ToolsDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    # Run the full checkout, config, and compilation pass inside a pristine system workspace hierarchy folder
+    # Run the configuration and build passes inside an completely sanitized root volume directory track
     - name: Configure and Build AVM
       run: |
-        # 1. Establish pristine alphanumeric path structures inside the runner work folder boundary
-        $CleanRoot = "C:\actions\runner\_work\_scratch"
-        $CleanSrc = Join-Path $CleanRoot "csrc"
-        $CleanBuild = Join-Path $CleanRoot "cbuild"
+        # 1. Dynamically capture the active root volume drive letter from the native workspace path variable
+        $ActiveDrive = [System.IO.Path]::GetPathRoot($env:RUNNER_WORKSPACE)
+        Write-Output "Detected active system drive volume layout at: $ActiveDrive"
+        
+        # 2. Establish pristine alphanumeric folder targets straight on that specific partition drive root
+        $CleanSrc = Join-Path $ActiveDrive "scratchsrc"
+        $CleanBuild = Join-Path $ActiveDrive "scratchbuild"
         
         New-Item -ItemType Directory -Force -Path $CleanSrc
         New-Item -ItemType Directory -Force -Path $CleanBuild
         
-        # 2. Force Git to clone directly into our sanitized destination directory, enabling long-paths mapping support
+        # 3. Force Git to clone directly into our sanitized destination directory, enabling long-paths mapping support
         Write-Output "Cloning target codebase into anonymous partition track..."
         git -c core.longpaths=true clone --recursive https://github.com "$CleanSrc"
         
-        # 3. Generate Visual Studio solutions targeting the absolute paths
+        # 4. Generate Visual Studio solutions targeting the absolute paths
         Write-Output "Configuring project with CMake..."
         cmake -S "$CleanSrc" -B "$CleanBuild" -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe" -DENABLE_DOCS=0
         
-        # 4. Compile static optimized production binaries
+        # 5. Compile static optimized production binaries
         Write-Output "Compiling production targets..."
         cmake --build "$CleanBuild" --config Release --parallel
         
-        # 5. Extract the freshly generated executables back to the workspace root for tracking upload steps
+        # 6. Extract the freshly generated executables back to the workspace root for tracking upload steps
         New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\avm_binaries"
         if (Test-Path "$CleanBuild\Release\avmenc.exe") {
             Copy-Item "$CleanBuild\Release\avmenc.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
