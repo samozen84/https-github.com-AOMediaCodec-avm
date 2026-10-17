@@ -26,39 +26,31 @@ jobs:
         Invoke-WebRequest -Uri "https://tortall.net" -OutFile "$ToolsDir\yasm.exe"
         echo "$ToolsDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
+    # 1. Native checkout directly into the user profile area to avoid path parsing bugs
     - name: Fetch Target Codebase cleanly
       uses: actions/checkout@v4
       with:
         repository: 'AOMediaCodec/avm'
         ref: 'main'
-        path: 'raw_source'
+        path: '../../workspacesrc' # Climbs up out of the hyphenated repository folder tree
         submodules: 'recursive'
 
-    # Secure environment sandboxing using dynamic user profile directories
+    # 2. Configure and build using clean, symbol-free relative folder structures
     - name: Configure and Build AVM
       run: |
-        # 1. Dynamically target the user profile directory to clear OS permission conflicts
-        $SandboxRoot = Join-Path $env:USERPROFILE "workspace"
-        $PhysicalSrc = Join-Path $SandboxRoot "csrc"
-        $PhysicalBuild = Join-Path $SandboxRoot "cbuild"
+        # Establish a clean build folder next to the safe source directory
+        $PhysicalSrc = "$env:GITHUB_WORKSPACE\..\..\workspacesrc"
+        $PhysicalBuild = "$env:GITHUB_WORKSPACE\..\..\workspacebuild"
         
-        # 2. Instantiate the physical paths securely on the machine instance
-        New-Item -ItemType Directory -Force -Path $PhysicalSrc
         New-Item -ItemType Directory -Force -Path $PhysicalBuild
         
-        # 3. Duplicate codebase files out of the hyphenated repository folder structure
-        Write-Output "Staging files to symbol-free directory path..."
-        Copy-Item -Path "$env:GITHUB_WORKSPACE\raw_source\*" -Destination $PhysicalSrc -Recurse -Force
-        
-        # 4. Generate Visual Studio solutions targeting the absolute paths
         Write-Output "Configuring project with CMake..."
         cmake -S "$PhysicalSrc" -B "$PhysicalBuild" -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe" -DENABLE_DOCS=0
         
-        # 5. Compile optimized production binaries
         Write-Output "Compiling production targets..."
         cmake --build "$PhysicalBuild" --config Release --parallel
         
-        # 6. Extract the freshly generated executables back to the workspace root for tracking
+        # Safe staging loop to move completed executables back to the repository workspace
         New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\avm_binaries"
         Copy-Item "$PhysicalBuild\Release\avmenc.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
         Copy-Item "$PhysicalBuild\Release\avmdec.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
