@@ -11,12 +11,13 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    # 1. Pull down the official AOMediaCodec source files instead of your empty repository
+    # 1. Check out the AVM source code into an isolated subdirectory named 'avm_source'
     - name: Checkout AVM Reference Source Code
       uses: actions/checkout@v4
       with:
         repository: 'AOMediaCodec/avm'
-        ref: 'main' # Changes this to 'av2-enc' if you want to build the active development branch
+        ref: 'main'
+        path: 'avm_source'
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -29,8 +30,11 @@ jobs:
         Invoke-WebRequest -Uri "https://tortall.net" -OutFile "C:\tools\yasm.exe"
         echo "C:\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    - name: Configure CMake for Visual Studio
-      run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+    # 2. Build out from an external folder location ('avm_build') to satisfy the CMake rules
+    - name: Configure CMake Externally
+      run: |
+        mkdir avm_build
+        cmake -S avm_source -B avm_build -G "Visual Studio 17 2022" -A x64
 
     - name: Build AVM Reference Software
-      run: cmake --build build --config Release --parallel
+      run: cmake --build avm_build --config Release --parallel
