@@ -25,7 +25,7 @@ jobs:
         Invoke-WebRequest -Uri "https://tortall.net" -OutFile "C:\tools\yasm.exe"
         echo "C:\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    # Use native checkout into a custom path to prevent command line cloning crashes
+    # 1. Pull down the target source code natively into the workspace
     - name: Fetch Target Codebase cleanly
       uses: actions/checkout@v4
       with:
@@ -34,33 +34,33 @@ jobs:
         path: 'raw_source'
         submodules: 'recursive'
 
-    # Clean the path string programmatically to bypass internal validation checks
+    # 2. Duplicate code into an absolute, symbol-free physical directory to compile safely
     - name: Configure and Build AVM
       run: |
-        # 1. Take the safe temp path and scrub the word "avm" out of it completely
-        $ScrubbedTemp = $env:RUNNER_TEMP -ireplace "avm", "codec"
+        # Create physical folders directly in the user profile area to avoid any 'avm' string matches
+        $PhysicalSrc = "C:\Users\runneradmin\srcdir"
+        $PhysicalBuild = "C:\Users\runneradmin\builddir"
         
-        # 2. Establish clean absolute destination tracks inside the scrubbed space
-        $IsolatedSrc = Join-Path $ScrubbedTemp "csrc"
-        $IsolatedBuild = Join-Path $ScrubbedTemp "cbuild"
+        # Instantiate the directories on the drive partition
+        New-Item -ItemType Directory -Force -Path $PhysicalSrc
+        New-Item -ItemType Directory -Force -Path $PhysicalBuild
         
-        # 3. Copy the checked out source code into our sanitized source folder location
-        New-Item -ItemType Directory -Force -Path $IsolatedSrc
-        Copy-Item -Path "$env:GITHUB_WORKSPACE\raw_source\*" -Destination $IsolatedSrc -Recurse -Force
+        # Physically copy the files over to the pristine user space path
+        Write-Output "Staging files to user profile space..."
+        Copy-Item -Path "$env:GITHUB_WORKSPACE\raw_source\*" -Destination $PhysicalSrc -Recurse -Force
         
-        # 4. Generate build definitions using the sanitized absolute tracking paths
+        # Generate Visual Studio solutions targeting the symbol-free absolute paths
         Write-Output "Configuring project with CMake..."
-        New-Item -ItemType Directory -Force -Path $IsolatedBuild
-        cmake -S "$IsolatedSrc" -B "$IsolatedBuild" -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe" -DENABLE_DOCS=0
+        cmake -S "$PhysicalSrc" -B "$PhysicalBuild" -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe" -DENABLE_DOCS=0
         
-        # 5. Compile optimized binaries
+        # Compile optimized production binaries
         Write-Output "Compiling production targets..."
-        cmake --build "$IsolatedBuild" --config Release --parallel
+        cmake --build "$PhysicalBuild" --config Release --parallel
         
-        # 6. Extract the freshly generated executables back to the workspace root for tracking
+        # Move the compiled binaries back to the runner workspace for tracking
         New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\avm_binaries"
-        Copy-Item "$IsolatedBuild\Release\avmenc.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
-        Copy-Item "$IsolatedBuild\Release\avmdec.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
+        Copy-Item "$PhysicalBuild\Release\avmenc.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
+        Copy-Item "$PhysicalBuild\Release\avmdec.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
 
     - name: Upload Compiled AVM Binaries
       uses: actions/upload-artifact@v4
