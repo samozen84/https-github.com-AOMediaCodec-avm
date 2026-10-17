@@ -13,6 +13,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        path: src
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -27,11 +29,11 @@ jobs:
 
     - name: Configure CMake for Visual Studio
       run: |
-        # Locate the subfolder containing CMakeLists.txt
-        $SrcDir = (Get-ChildItem -Recurse -Filter "CMakeLists.txt" | Select-Object -First 1).DirectoryName
+        # Locate the subfolder containing CMakeLists.txt inside the 'src' path
+        $SrcDir = (Get-ChildItem -Path "src" -Recurse -Filter "CMakeLists.txt" | Select-Object -First 1).DirectoryName
         Write-Output "Found source directory at: $SrcDir"
         
-        # Configure and pass the true source directory path to CMake
+        # Configure CMake using the exact discovered source directory
         cmake -S "$SrcDir" -B build -G "Visual Studio 17 2022" -A x64
 
     - name: Build AVM Reference Software
