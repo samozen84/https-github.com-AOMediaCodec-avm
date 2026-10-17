@@ -21,11 +21,11 @@ jobs:
 
     - name: Install Yasm manually
       run: |
-        New-Item -ItemType Directory -Force -Path "C:\tools"
-        Invoke-WebRequest -Uri "https://tortall.net" -OutFile "C:\tools\yasm.exe"
-        echo "C:\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        $ToolsDir = Join-Path $env:USERPROFILE "tools"
+        New-Item -ItemType Directory -Force -Path $ToolsDir
+        Invoke-WebRequest -Uri "https://tortall.net" -OutFile "$ToolsDir\yasm.exe"
+        echo "$ToolsDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    # 1. Pull down the target source code natively into the workspace
     - name: Fetch Target Codebase cleanly
       uses: actions/checkout@v4
       with:
@@ -34,30 +34,31 @@ jobs:
         path: 'raw_source'
         submodules: 'recursive'
 
-    # 2. Duplicate code into an absolute, symbol-free physical directory to compile safely
+    # Secure environment sandboxing using dynamic user profile directories
     - name: Configure and Build AVM
       run: |
-        # Create physical folders directly in the user profile area to avoid any 'avm' string matches
-        $PhysicalSrc = "C:\Users\runneradmin\srcdir"
-        $PhysicalBuild = "C:\Users\runneradmin\builddir"
+        # 1. Dynamically target the user profile directory to clear OS permission conflicts
+        $SandboxRoot = Join-Path $env:USERPROFILE "workspace"
+        $PhysicalSrc = Join-Path $SandboxRoot "csrc"
+        $PhysicalBuild = Join-Path $SandboxRoot "cbuild"
         
-        # Instantiate the directories on the drive partition
+        # 2. Instantiate the physical paths securely on the machine instance
         New-Item -ItemType Directory -Force -Path $PhysicalSrc
         New-Item -ItemType Directory -Force -Path $PhysicalBuild
         
-        # Physically copy the files over to the pristine user space path
-        Write-Output "Staging files to user profile space..."
+        # 3. Duplicate codebase files out of the hyphenated repository folder structure
+        Write-Output "Staging files to symbol-free directory path..."
         Copy-Item -Path "$env:GITHUB_WORKSPACE\raw_source\*" -Destination $PhysicalSrc -Recurse -Force
         
-        # Generate Visual Studio solutions targeting the symbol-free absolute paths
+        # 4. Generate Visual Studio solutions targeting the absolute paths
         Write-Output "Configuring project with CMake..."
         cmake -S "$PhysicalSrc" -B "$PhysicalBuild" -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe" -DENABLE_DOCS=0
         
-        # Compile optimized production binaries
+        # 5. Compile optimized production binaries
         Write-Output "Compiling production targets..."
         cmake --build "$PhysicalBuild" --config Release --parallel
         
-        # Move the compiled binaries back to the runner workspace for tracking
+        # 6. Extract the freshly generated executables back to the workspace root for tracking
         New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\avm_binaries"
         Copy-Item "$PhysicalBuild\Release\avmenc.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
         Copy-Item "$PhysicalBuild\Release\avmdec.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
