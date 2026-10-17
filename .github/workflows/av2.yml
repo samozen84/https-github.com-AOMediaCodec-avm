@@ -25,23 +25,17 @@ jobs:
         Invoke-WebRequest -Uri "https://tortall.net" -OutFile "C:\tools\yasm.exe"
         echo "C:\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    - name: Configure CMake for Visual Studio
+    - name: Configure and Build AVM (Unified Session)
       run: |
-        # Locate the subfolder containing CMakeLists.txt
+        # 1. Locate the subfolder containing CMakeLists.txt
         $SrcDir = (Get-ChildItem -Recurse -Filter "CMakeLists.txt" | Select-Object -First 1).DirectoryName
         Write-Output "Found source directory at: $SrcDir"
         
-        # Change current location into that folder explicitly
+        # 2. Change location into that directory explicitly
         cd "$SrcDir"
         
-        # Run CMake generation targeting the local directory context
+        # 3. Configure CMake locally inside this active session context
         cmake -S . -B build -G "Visual Studio 17 2022" -A x64
-
-    - name: Build AVM Reference Software
-      run: |
-        # Locate the subfolder containing the generated build directory
-        $BuildDir = (Get-ChildItem -Recurse -Directory -Filter "build" | Select-Object -First 1).FullName
-        Write-Output "Found build directory at: $BuildDir"
         
-        # Execute compile step
-        cmake --build "$BuildDir" --config Release --parallel
+        # 4. Compile the project while still inside the tracking directory loop
+        cmake --build build --config Release --parallel
