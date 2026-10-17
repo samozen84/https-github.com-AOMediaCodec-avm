@@ -26,31 +26,25 @@ jobs:
         Invoke-WebRequest -Uri "https://tortall.net" -OutFile "$ToolsDir\yasm.exe"
         echo "$ToolsDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    # 1. Native safe checkout inside a workspace subfolder
+    # 1. Native checkout directly into a completely pristine alphanumeric subdirectory path
     - name: Fetch Target Codebase cleanly
       uses: actions/checkout@v4
       with:
         repository: 'AOMediaCodec/avm'
         ref: 'main'
-        path: 'clean_src'
+        path: 'codecsource'
         submodules: 'recursive'
 
-    # 2. Configure and build using the system's global temp directory entirely
+    # 2. Compile within an absolute target directory while setting the source override parameters
     - name: Configure and Build AVM
+      env:
+        AVM_SOURCE_DIR: 'codecsource'
       run: |
-        # Force both input and output to land inside the anonymous C:\Windows\TEMP layout
-        $AbsoluteSrcPath = "$env:TEMP\c_src"
-        $AbsoluteBuildPath = "$env:TEMP\c_build"
-        
-        New-Item -ItemType Directory -Force -Path $AbsoluteSrcPath
-        New-Item -ItemType Directory -Force -Path $AbsoluteBuildPath
-        
-        # Pull code completely out of the hyphenated GitHub workspace tree path
-        Write-Output "Staging codebase completely outside of workspace..."
-        Move-Item -Path "$env:GITHUB_WORKSPACE\clean_src\*" -Destination $AbsoluteSrcPath -Force
+        # Isolate the output folder inside the safe system temp tree path
+        $AbsoluteBuildPath = "$env:TEMP\codecbuild"
         
         Write-Output "Configuring project with CMake..."
-        cmake -S "$AbsoluteSrcPath" -B "$AbsoluteBuildPath" -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe" -DENABLE_DOCS=0
+        cmake -S "$env:GITHUB_WORKSPACE\codecsource" -B "$AbsoluteBuildPath" -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe" -DENABLE_DOCS=0
         
         Write-Output "Compiling production targets..."
         cmake --build "$AbsoluteBuildPath" --config Release --parallel
