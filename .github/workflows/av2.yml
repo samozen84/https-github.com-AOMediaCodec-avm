@@ -11,31 +11,35 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    # 1. Standard checkout for your repo to properly register the action runner
-    - name: Checkout Workflow Repository
+    # 1. Fetch the authentic code with FULL Git history to satisfy version checks
+    - name: Checkout AVM Reference Source Code
       uses: actions/checkout@v4
+      with:
+        repository: 'AOMediaCodec/avm'
+        ref: 'main'
+        path: 'avm_source'
+        submodules: 'recursive'
+        fetch-depth: 0
 
+    # 2. Configure Python interpreter context cleanly
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
+    # 3. Pull down assembler dependency
     - name: Install Yasm manually
       run: |
         New-Item -ItemType Directory -Force -Path "C:\tools"
         Invoke-WebRequest -Uri "https://tortall.net" -OutFile "C:\tools\yasm.exe"
         echo "C:\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    # 2. Native git clone to completely preserve the repository context structure
-    - name: Clone AVM Reference Source Code Native
-      run: |
-        git clone --recursive https://github.com avm_source
-        cd avm_source
-        git checkout main
-
-    # 3. Compile from an isolated external tree tracking layout
-    - name: Configure and Build AVM
+    # 4. Generate Visual Studio project definitions in a standalone workspace block
+    - name: Configure CMake Externally
       run: |
         mkdir avm_build
         cmake -S avm_source -B avm_build -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe"
-        cmake --build avm_build --config Release --parallel
+
+    # 5. Compile into optimized static executables
+    - name: Build AVM Reference Software
+      run: cmake --build avm_build --config Release --parallel
