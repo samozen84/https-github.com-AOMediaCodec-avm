@@ -39,11 +39,15 @@ jobs:
         cmake --build "$env:RUNNER_TEMP\cbuild" --config Release --parallel
       working-directory: csrc
 
-    # New step to safely export the compiled binaries out of the hidden runner temp partition
+    # Copy files into a clean workspace subdirectory using native environment parameters before uploading
+    - name: Prepare Artifacts
+      run: |
+        New-Item -ItemType Directory -Force -Path "avm_binaries"
+        Copy-Item "$env:RUNNER_TEMP\cbuild\Release\avmenc.exe" -Destination "avm_binaries\"
+        Copy-Item "$env:RUNNER_TEMP\cbuild\Release\avmdec.exe" -Destination "avm_binaries\"
+
     - name: Upload Compiled AVM Binaries
       uses: actions/upload-artifact@v4
       with:
         name: avm-windows-x64-binaries
-        path: |
-          ${{ env.RUNNER_TEMP }}/cbuild/Release/avmenc.exe
-          ${{ env.RUNNER_TEMP }}/cbuild/Release/avmdec.exe
+        path: avm_binaries/
