@@ -19,26 +19,26 @@ jobs:
       with:
         python-version: '3.11'
 
+    # 1. Install assembler to a neutral, system-accessible tools directory
     - name: Install Yasm manually
       run: |
         New-Item -ItemType Directory -Force -Path "C:\tools"
         Invoke-WebRequest -Uri "https://tortall.net" -OutFile "C:\tools\yasm.exe"
         echo "C:\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    # 1. Native safe checkout into an alphanumeric path folder name
-    - name: Fetch Target Codebase cleanly
-      uses: actions/checkout@v4
-      with:
-        repository: 'AOMediaCodec/avm'
-        ref: 'main'
-        path: 'codec_src'
-        submodules: 'recursive'
-
-    # 2. Output the build artifacts to a clean sibling directory location
-    - name: Configure CMake Externally
+    # 2. Force download and build phases directly inside the temporary OS partition path
+    - name: Execute Full Sandbox Build Sequence
       run: |
-        mkdir codec_build
-        cmake -S codec_src -B codec_build -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe"
-
-    - name: Build AVM Reference Software
-      run: cmake --build codec_build --config Release --parallel
+        # Define clean, symbol-free directory variables inside the OS Temp partition
+        $SandboxedSrc = Join-Path $env:RUNNER_TEMP "csrc"
+        $SandboxedBuild = Join-Path $env:RUNNER_TEMP "cbuild"
+        
+        Write-Output "Cloning target source into: $SandboxedSrc"
+        git clone --recursive https://github.com "$SandboxedSrc"
+        
+        Write-Output "Generating build files into: $SandboxedBuild"
+        New-Item -ItemType Directory -Force -Path "$SandboxedBuild"
+        
+        # Configure and compile entirely within the safe partition layout
+        cmake -S "$SandboxedSrc" -B "$SandboxedBuild" -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe"
+        cmake --build "$SandboxedBuild" --config Release --parallel
