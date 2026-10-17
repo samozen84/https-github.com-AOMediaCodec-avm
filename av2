@@ -1,0 +1,29 @@
+name: AVM Codec Build CI
+
+on:
+  push:
+    branches: [ main, av2-enc ]
+  pull_request:
+    branches: [ main, av2-enc ]
+
+jobs:
+  build-ubuntu:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake perl yasm python3
+
+    - name: Create Build Directory
+      run: mkdir build
+
+    - name: Configure CMake
+      run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build AVM Reference Software
+      run: cmake --build build --parallel $(nproc)
