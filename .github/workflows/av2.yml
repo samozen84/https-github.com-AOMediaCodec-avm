@@ -26,7 +26,7 @@ jobs:
         Invoke-WebRequest -Uri "https://tortall.net" -OutFile "$ToolsDir\yasm.exe"
         echo "$ToolsDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    # 1. Safely pull down the codebase files into a temporary workspace folder layout
+    # 1. Pull down the codebase files securely into a standard temporary workspace folder
     - name: Fetch Target Codebase cleanly
       uses: actions/checkout@v4
       with:
@@ -46,12 +46,16 @@ jobs:
         New-Item -ItemType Directory -Force -Path $SanitizedSrc
         New-Item -ItemType Directory -Force -Path $SanitizedBuild
         
-        # Use robocopy for an uncorrupted, multi-threaded mirror transfer of submodules
         Write-Output "Staging source files cleanly using Robocopy..."
+        # Robocopy codes below 8 are completely successful copy operations
         robocopy "$env:GITHUB_WORKSPACE\raw-source" "$SanitizedSrc" /E /R:1 /W:1 /NFL /NDL /NJH /NJS
-        
-        # Robocopy returns non-zero codes on success, clear the error variable to prevent step failures
-        $global:LASTEXITCODE = 0
+        if ($LASTEXITCODE -lt 8) {
+            Write-Output "Robocopy structural mirror completed successfully."
+            $global:LASTEXITCODE = 0
+        } else {
+            Write-Error "Robocopy failed with a fatal error code: $LASTEXITCODE"
+            exit $LASTEXITCODE
+        }
         
         # Run project configuration using completely sanitized destination maps
         Write-Output "Configuring project with CMake..."
