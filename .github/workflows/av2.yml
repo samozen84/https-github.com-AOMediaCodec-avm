@@ -35,39 +35,26 @@ jobs:
         path: 'clean_src'
         submodules: 'recursive'
 
-    # 2. Dynamically rename the parent directory on the drive volume to scrub the word "avm" out of the absolute paths
+    # 2. Configure and build using the dedicated CMake bypass flag parameter
     - name: Configure and Build AVM
       run: |
-        # Get the absolute path of the workspace parent container (D:\a\https-github.com-AOMediaCodec-avm)
-        $CurrentWorkspace = $env:GITHUB_WORKSPACE
-        $ParentDir = Split-Path -Path $CurrentWorkspace -Parent
-        
-        Write-Output "Renaming workspace container to break name loops..."
-        # Navigate one level up using the command line interpreter context to safely rename the directory handle
-        cd "$ParentDir"
-        cmd /c "ren https-github.com-AOMediaCodec-avm wspace"
-        
-        # Define the newly modified pristine pathway targets
-        $SanitizedSrc = "D:\a\wspace\clean_src"
-        $SanitizedBuild = "$env:TEMP\codecbuild"
-        New-Item -ItemType Directory -Force -Path $SanitizedBuild
+        # Force the configuration files to generate inside a dedicated companion folder
+        $AbsoluteBuildPath = "$env:TEMP\codecbuild"
+        New-Item -ItemType Directory -Force -Path $AbsoluteBuildPath
         
         Write-Output "Configuring project with CMake..."
-        cmake -S "$SanitizedSrc" -B "$SanitizedBuild" -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe" -DENABLE_DOCS=0
+        # -DALLOW_IN_SOURCE_BUILD=1 forces the compiler to ignore the repository name string check loops completely
+        cmake -S "$env:GITHUB_WORKSPACE\clean_src" -B "$AbsoluteBuildPath" -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe" -DENABLE_DOCS=0 -DALLOW_IN_SOURCE_BUILD=1
         
         Write-Output "Compiling production targets..."
-        cmake --build "$SanitizedBuild" --config Release --parallel
+        cmake --build "$AbsoluteBuildPath" --config Release --parallel
         
-        # Move the completed executables back to a temporary recovery folder
-        New-Item -ItemType Directory -Force -Path "D:\a\wspace\avm_binaries"
-        if (Test-Path "$SanitizedBuild\Release\avmenc.exe") {
-            Copy-Item "$SanitizedBuild\Release\avmenc.exe" -Destination "D:\a\wspace\avm_binaries\"
-            Copy-Item "$SanitizedBuild\Release\avmdec.exe" -Destination "D:\a\wspace\avm_binaries\"
+        # Move the completed executables back to a local workspace directory for artifact tracking
+        New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\avm_binaries"
+        if (Test-Path "$AbsoluteBuildPath\Release\avmenc.exe") {
+            Copy-Item "$AbsoluteBuildPath\Release\avmenc.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
+            Copy-Item "$AbsoluteBuildPath\Release\avmdec.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
         }
-        
-        # Restore original naming convention so the upload-artifact action can register the tracking folder structure natively
-        cd "$ParentDir"
-        cmd /c "ren wspace https-github.com-AOMediaCodec-avm"
 
     - name: Upload Compiled AVM Binaries
       uses: actions/upload-artifact@v4
