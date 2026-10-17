@@ -11,14 +11,9 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    # 1. Fetch the AVM repository along with all recursive submodules
-    - name: Checkout AVM Reference Source Code
+    # 1. Standard checkout for your repo to properly register the action runner
+    - name: Checkout Workflow Repository
       uses: actions/checkout@v4
-      with:
-        repository: 'AOMediaCodec/avm'
-        ref: 'main'
-        path: 'avm_source'
-        submodules: 'recursive'
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -31,11 +26,16 @@ jobs:
         Invoke-WebRequest -Uri "https://tortall.net" -OutFile "C:\tools\yasm.exe"
         echo "C:\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    # 2. Configure CMake while explicitly linking the Python interpreter executable path
-    - name: Configure CMake Externally
+    # 2. Native git clone to completely preserve the repository context structure
+    - name: Clone AVM Reference Source Code Native
+      run: |
+        git clone --recursive https://github.com avm_source
+        cd avm_source
+        git checkout main
+
+    # 3. Compile from an isolated external tree tracking layout
+    - name: Configure and Build AVM
       run: |
         mkdir avm_build
         cmake -S avm_source -B avm_build -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe"
-
-    - name: Build AVM Reference Software
-      run: cmake --build avm_build --config Release --parallel
+        cmake --build avm_build --config Release --parallel
