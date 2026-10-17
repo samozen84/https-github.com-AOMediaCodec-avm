@@ -25,17 +25,21 @@ jobs:
         Invoke-WebRequest -Uri "https://tortall.net" -OutFile "C:\tools\yasm.exe"
         echo "C:\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    - name: Configure and Build AVM (Unified Session)
+    - name: Configure and Build AVM
       run: |
-        # 1. Locate the subfolder containing CMakeLists.txt
-        $SrcDir = (Get-ChildItem -Recurse -Filter "CMakeLists.txt" | Select-Object -First 1).DirectoryName
-        Write-Output "Found source directory at: $SrcDir"
+        # 1. Target the repository folder name directly inside the workspace
+        $TargetDir = Join-Path $env:GITHUB_WORKSPACE "https-github.com-AOMediaCodec-avm"
         
-        # 2. Change location into that directory explicitly
-        cd "$SrcDir"
+        # Fallback to current working directory if the nested naming structure varies
+        if (-not (Test-Path "$TargetDir\CMakeLists.txt")) {
+            $TargetDir = $env:GITHUB_WORKSPACE
+        }
         
-        # 3. Configure CMake locally inside this active session context
+        Write-Output "Targeting source directory: $TargetDir"
+        cd "$TargetDir"
+        
+        # 2. Configure CMake locally
         cmake -S . -B build -G "Visual Studio 17 2022" -A x64
         
-        # 4. Compile the project while still inside the tracking directory loop
+        # 3. Compile the project 
         cmake --build build --config Release --parallel
