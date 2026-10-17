@@ -26,35 +26,34 @@ jobs:
         Invoke-WebRequest -Uri "https://tortall.net" -OutFile "$ToolsDir\yasm.exe"
         echo "$ToolsDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    # Run everything inside the user's localized app data space to clear write restrictions
+    # 1. Native safe checkout inside a clean workspace subfolder
+    - name: Fetch Target Codebase cleanly
+      uses: actions/checkout@v4
+      with:
+        repository: 'AOMediaCodec/avm'
+        ref: 'main'
+        path: 'clean_src'
+        submodules: 'recursive'
+
+    # 2. Configure and build using the system's global temp directory
     - name: Configure and Build AVM
       run: |
-        # 1. Establish clean tracking paths inside the local application partition space
-        $CleanSrc = Join-Path $env:LOCALAPPDATA "csrc"
-        $CleanBuild = Join-Path $env:LOCALAPPDATA "cbuild"
+        # Force the output to land inside the anonymous C:\Windows\TEMP layout
+        $AbsoluteBuildPath = "$env:TEMP\clean_build"
         
-        New-Item -ItemType Directory -Force -Path $CleanSrc
-        New-Item -ItemType Directory -Force -Path $CleanBuild
-        
-        # 2. Force Git clone into our sanitized destination directory, enabling long-paths support
-        Write-Output "Cloning target codebase into anonymous appdata track..."
-        git -c core.longpaths=true clone --recursive https://github.com "$CleanSrc"
-        
-        # 3. Generate Visual Studio solutions targeting the absolute paths
         Write-Output "Configuring project with CMake..."
-        cmake -S "$CleanSrc" -B "$CleanBuild" -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe" -DENABLE_DOCS=0
+        cmake -S "$env:GITHUB_WORKSPACE\clean_src" -B "$AbsoluteBuildPath" -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe" -DENABLE_DOCS=0
         
-        # 4. Compile static optimized production binaries
         Write-Output "Compiling production targets..."
-        cmake --build "$CleanBuild" --config Release --parallel
+        cmake --build "$AbsoluteBuildPath" --config Release --parallel
         
-        # 5. Extract the freshly generated executables back to the workspace root for artifact tracking
+        # Move the completed executables back to the repository workspace
         New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\avm_binaries"
-        if (Test-Path "$CleanBuild\Release\avmenc.exe") {
-            Copy-Item "$CleanBuild\Release\avmenc.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
-            Copy-Item "$CleanBuild\Release\avmdec.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
+        if (Test-Path "$AbsoluteBuildPath\Release\avmenc.exe") {
+            Copy-Item "$AbsoluteBuildPath\Release\avmenc.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
+            Copy-Item "$AbsoluteBuildPath\Release\avmdec.exe" -Destination "$env:GITHUB_WORKSPACE\avm_binaries\"
         }
-        
+
     - name: Upload Compiled AVM Binaries
       uses: actions/upload-artifact@v4
       with:
