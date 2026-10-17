@@ -11,35 +11,32 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    # 1. Fetch the authentic code with FULL Git history to satisfy version checks
+    # 1. Force a clean, alphanumeric local path string without symbols or domains
     - name: Checkout AVM Reference Source Code
       uses: actions/checkout@v4
       with:
         repository: 'AOMediaCodec/avm'
         ref: 'main'
-        path: 'avm_source'
+        path: 'avm_src'
         submodules: 'recursive'
         fetch-depth: 0
 
-    # 2. Configure Python interpreter context cleanly
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
-    # 3. Pull down assembler dependency
     - name: Install Yasm manually
       run: |
         New-Item -ItemType Directory -Force -Path "C:\tools"
         Invoke-WebRequest -Uri "https://tortall.net" -OutFile "C:\tools\yasm.exe"
         echo "C:\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    # 4. Generate Visual Studio project definitions in a standalone workspace block
+    # 2. Point to the sanitized directory structure
     - name: Configure CMake Externally
       run: |
         mkdir avm_build
-        cmake -S avm_source -B avm_build -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe"
+        cmake -S avm_src -B avm_build -G "Visual Studio 17 2022" -A x64 -DPYTHON_EXECUTABLE="$env:pythonLocation\python.exe"
 
-    # 5. Compile into optimized static executables
     - name: Build AVM Reference Software
       run: cmake --build avm_build --config Release --parallel
